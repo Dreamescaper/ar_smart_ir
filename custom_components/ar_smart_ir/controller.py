@@ -28,7 +28,7 @@ Wire-format summary used by each controller below:
   Tuya cloud        tuya.send_ir_code    {device_id, code:"<tuya-b64>"}
   LocalTuya         localtuya.set_dp     {entity_id|device_id, dp, value}
   Tuya / generic    remote.send_command  (legacy fallthrough)
-  ZHA UFO-R11       zha cluster cmd      0xE004/IRSend with code="<tuya-b64>"
+  ZHA Zosung        zha cluster cmd      0xE004/IRSend with code="<tuya-b64>"
 
 Encoding lists below tell SmartIR which source encodings each controller
 supports — if the JSON declares Tuya and the controller is BroadlinkController
@@ -68,7 +68,7 @@ ESPHOME_CONTROLLER = "ESPHome"
 INFRARED_CONTROLLER = "Infrared"
 TUYA_CONTROLLER = "Tuya"
 UFOR11_CONTROLLER = "UFOR11"
-ZHA_UFOR11_CONTROLLER = "ZHA UFO-R11"
+ZHA_ZOSUNG_CONTROLLER = "ZHA Zosung"
 
 ENC_BASE64 = "Base64"
 ENC_HEX = "Hex"
@@ -89,7 +89,7 @@ ESPHOME_COMMANDS_ENCODING = ALL_ENCODINGS
 INFRARED_COMMANDS_ENCODING = ALL_ENCODINGS
 TUYA_COMMANDS_ENCODING = ALL_ENCODINGS
 UFOR11_COMMANDS_ENCODING = ALL_ENCODINGS
-ZHA_UFOR11_COMMANDS_ENCODING = ALL_ENCODINGS
+ZHA_ZOSUNG_COMMANDS_ENCODING = ALL_ENCODINGS
 
 # Default IR carrier frequency (Hz). Can be overridden per-controller via
 # controller_data when the user knows their device uses something different.
@@ -111,7 +111,7 @@ def get_controller(hass, controller, encoding, controller_data, delay):
         INFRARED_CONTROLLER: InfraredController,
         TUYA_CONTROLLER: TuyaController,
         UFOR11_CONTROLLER: UFOR11Controller,
-        ZHA_UFOR11_CONTROLLER: ZHAUFOR11Controller,
+        ZHA_ZOSUNG_CONTROLLER: ZHAZosungController,
     }
 
     try:
@@ -919,24 +919,24 @@ class TuyaController(AbstractController):
         await self._run_sequence(command, send_step)
 
 
-# ── ZHA UFO-R11 / TS1201 ────────────────────────────────────────────────────
+# ── ZHA Zosung / TS1201 ─────────────────────────────────────────────────────
 #
 # ZHA's TS1201/Zosung quirk exposes a high-level IRSend command on the
 # ZosungIRControl cluster (0xE004). The quirk wraps the code into the device's
 # JSON payload and handles the lower-level 0xED00 chunking, so this controller
 # only needs to provide the Tuya/Zosung Base64 code to command 0x02.
 
-class ZHAUFOR11Controller(AbstractController):
+class ZHAZosungController(AbstractController):
     def check_encoding(self, encoding):
-        if encoding not in ZHA_UFOR11_COMMANDS_ENCODING:
+        if encoding not in ZHA_ZOSUNG_COMMANDS_ENCODING:
             raise Exception(
-                "The encoding is not supported by the ZHA UFO-R11 controller."
+                "The encoding is not supported by the ZHA Zosung controller."
             )
 
     def _get_zha_ieee(self) -> str:
         device_id = str(self._controller_data or "").strip()
         if not device_id:
-            raise Exception("ZHA UFO-R11 controller needs a ZHA device.")
+            raise Exception("ZHA Zosung controller needs a ZHA device.")
 
         device_entry = dr.async_get(self.hass).async_get(device_id)
         if device_entry is None:

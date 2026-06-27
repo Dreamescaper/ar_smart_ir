@@ -61,13 +61,13 @@ AR Smart IR supports multiple controller methods used in Home Assistant:
 - **LOOKin**
 - **Tuya**
 - **UFO-R11** via Zigbee2MQTT
-- **ZHA UFO-R11** / TS1201 via ZHA's Zosung quirk
+- **ZHA Zosung** / TS1201 via ZHA's Zosung quirk
 
 The **Infrared** controller consumes an existing Home Assistant native infrared
 emitter entity. It does not expose AR Smart IR itself as an infrared emitter or
 receiver, and native infrared receiver-based learning is not supported yet.
 
-The **ZHA UFO-R11** controller targets Tuya/Zosung TS1201 IR blasters paired
+The **ZHA Zosung** controller targets Tuya/Zosung TS1201 IR blasters paired
 through ZHA, including UFO-R11 / ZS06 variants handled by ZHA's `ts1201.py`
 quirk. It sends through the quirk's high-level `IRSend` command; ZHA learning is
 not supported yet.
@@ -178,9 +178,8 @@ MQTT, ESPHome, HEX, and Raw workflows are actively being improved
 Some setups may still require device-specific testing depending on the IR blaster and command format
 Real-world compatibility can vary based on the quality and structure of the source code file being used
 Native Home Assistant Infrared support requires Home Assistant 2026.4.0 or newer
-ZHA UFO-R11 support requires a ZHA-paired TS1201/Zosung device with the matching quirk loaded
+ZHA Zosung support requires a ZHA-paired TS1201/Zosung device with the matching quirk loaded
 🙌 Credits
 AR Smart IR is inspired by the original SmartIR project and the wider Home Assistant community.
-
 
 

@@ -55,6 +55,8 @@ from .helpers import (
 )
 from .controller import get_controller
 
+ZHA_ZOSUNG_CONTROLLER = "ZHA Zosung"
+
 CONTROLLERS = [
     "Broadlink",
     "LinkNLink",
@@ -65,7 +67,7 @@ CONTROLLERS = [
     "Infrared",
     "Tuya",
     "UFOR11",
-    "ZHA UFO-R11",
+    ZHA_ZOSUNG_CONTROLLER,
 ]
 
 TEST_COMMAND_PRIORITIES = (
@@ -86,7 +88,7 @@ RAW_BASED_CONTROLLERS = {
     "Infrared",
     "Tuya",
     "UFOR11",
-    "ZHA UFO-R11",
+    ZHA_ZOSUNG_CONTROLLER,
 }
 
 
@@ -172,7 +174,7 @@ def _normalize_controller_target(data: dict[str, Any]) -> None:
         data[CONF_INFRARED_ENTITY] = infrared_entity
         data[CONF_CONTROLLER_DATA] = infrared_entity
         data.pop(CONF_ZHA_DEVICE, None)
-    elif data.get(CONF_CONTROLLER) == "ZHA UFO-R11":
+    elif data.get(CONF_CONTROLLER) == ZHA_ZOSUNG_CONTROLLER:
         zha_device = data.get(CONF_ZHA_DEVICE) or data.get(CONF_CONTROLLER_DATA)
         data[CONF_ZHA_DEVICE] = zha_device
         data[CONF_CONTROLLER_DATA] = zha_device
@@ -185,7 +187,7 @@ def _normalize_controller_target(data: dict[str, Any]) -> None:
 def _controller_target_error_key(controller: str) -> str:
     if controller == "Infrared":
         return CONF_INFRARED_ENTITY
-    if controller == "ZHA UFO-R11":
+    if controller == ZHA_ZOSUNG_CONTROLLER:
         return CONF_ZHA_DEVICE
     return CONF_CONTROLLER_DATA
 
@@ -215,7 +217,7 @@ def _build_compatibility_message(
             "timings. Test a command before saving."
         )
 
-    if selected_controller == "ZHA UFO-R11":
+    if selected_controller == ZHA_ZOSUNG_CONTROLLER:
         return (
             "This code will be converted to the Tuya/Zosung format used by ZHA "
             "TS1201 IR blasters. Test a command before saving."
@@ -359,7 +361,7 @@ class ARSmartIRConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     default=infrared_default or "",
                 )
             ] = _infrared_entity_selector()
-        elif controller == "ZHA UFO-R11":
+        elif controller == ZHA_ZOSUNG_CONTROLLER:
             zha_device_default = (
                 current_values.get(CONF_ZHA_DEVICE)
                 or current_values.get(CONF_CONTROLLER_DATA)
@@ -910,7 +912,7 @@ class ARSmartIROptionsFlow(config_entries.OptionsFlow):
                     ),
                 )
             ] = _infrared_entity_selector()
-        elif controller == "ZHA UFO-R11":
+        elif controller == ZHA_ZOSUNG_CONTROLLER:
             schema[
                 vol.Optional(
                     CONF_ZHA_DEVICE,
