@@ -28,6 +28,7 @@ Wire-format summary used by each controller below:
   Tuya cloud        tuya.send_ir_code    {device_id, code:"<tuya-b64>"}
   LocalTuya         localtuya.set_dp     {entity_id|device_id, dp, value}
   Tuya / generic    remote.send_command  (legacy fallthrough)
+  ZHA UFO-R11       zha cluster cmd      0xE004/IRSend with code="<tuya-b64>"
 
 Encoding lists below tell SmartIR which source encodings each controller
 supports — if the JSON declares Tuya and the controller is BroadlinkController
@@ -49,6 +50,7 @@ import requests
 
 from homeassistant.components import infrared
 from homeassistant.const import ATTR_ENTITY_ID
+from homeassistant.helpers import device_registry as dr
 
 from .helpers import Helper
 from .tuya_codec import decode_tuya, encode_tuya
@@ -66,6 +68,7 @@ ESPHOME_CONTROLLER = "ESPHome"
 INFRARED_CONTROLLER = "Infrared"
 TUYA_CONTROLLER = "Tuya"
 UFOR11_CONTROLLER = "UFOR11"
+ZHA_UFOR11_CONTROLLER = "ZHA UFO-R11"
 
 ENC_BASE64 = "Base64"
 ENC_HEX = "Hex"
@@ -86,6 +89,7 @@ ESPHOME_COMMANDS_ENCODING = ALL_ENCODINGS
 INFRARED_COMMANDS_ENCODING = ALL_ENCODINGS
 TUYA_COMMANDS_ENCODING = ALL_ENCODINGS
 UFOR11_COMMANDS_ENCODING = ALL_ENCODINGS
+ZHA_UFOR11_COMMANDS_ENCODING = ALL_ENCODINGS
 
 # Default IR carrier frequency (Hz). Can be overridden per-controller via
 # controller_data when the user knows their device uses something different.
@@ -107,6 +111,7 @@ def get_controller(hass, controller, encoding, controller_data, delay):
         INFRARED_CONTROLLER: InfraredController,
         TUYA_CONTROLLER: TuyaController,
         UFOR11_CONTROLLER: UFOR11Controller,
+        ZHA_UFOR11_CONTROLLER: ZHAUFOR11Controller,
     }
 
     try:
@@ -910,6 +915,70 @@ class TuyaController(AbstractController):
                 await self.hass.services.async_call(
                     "remote", "send_command", service_data
                 )
+
+        await self._run_sequence(command, send_step)
+
+
+# ── ZHA UFO-R11 / TS1201 ────────────────────────────────────────────────────
+#
+# ZHA's TS1201/Zosung quirk exposes a high-level IRSend command on the
+# ZosungIRControl cluster (0xE004). The quirk wraps the code into the device's
+# JSON payload and handles the lower-level 0xED00 chunking, so this controller
+# only needs to provide the Tuya/Zosung Base64 code to command 0x02.
+
+class ZHAUFOR11Controller(AbstractController):
+    def check_encoding(self, encoding):
+        if encoding not in ZHA_UFOR11_COMMANDS_ENCODING:
+            raise Exception(
+                "The encoding is not supported by the ZHA UFO-R11 controller."
+            )
+
+    def _get_zha_ieee(self) -> str:
+        device_id = str(self._controller_data or "").strip()
+        if not device_id:
+            raise Exception("ZHA UFO-R11 controller needs a ZHA device.")
+
+        device_entry = dr.async_get(self.hass).async_get(device_id)
+        if device_entry is None:
+            raise Exception(f"ZHA device '{device_id}' was not found.")
+
+        zigbee_connection_type = getattr(dr, "CONNECTION_ZIGBEE", "zigbee")
+        for connection_type, identifier in device_entry.connections:
+            if connection_type == zigbee_connection_type:
+                return identifier
+
+        device_name = (
+            getattr(device_entry, "name", None)
+            or getattr(device_entry, "name_by_user", None)
+            or device_id
+        )
+        raise Exception(f"Device '{device_name}' does not have a Zigbee IEEE.")
+
+    async def send(self, command):
+        ieee = self._get_zha_ieee()
+
+        async def send_step(step):
+            code, repeat_count, repeat_delay_secs = self._get_command_spec(step)
+            tuya_b64 = self._normalize_command(code, ENC_TUYA)
+
+            service_data = {
+                "ieee": ieee,
+                "endpoint_id": 1,
+                "cluster_id": 0xE004,
+                "cluster_type": "in",
+                "command": 0x02,
+                "command_type": "server",
+                "params": {"code": tuya_b64},
+            }
+
+            async def send_once():
+                await self.hass.services.async_call(
+                    "zha",
+                    "issue_zigbee_cluster_command",
+                    service_data,
+                )
+
+            await self._repeat_with_delay(send_once, repeat_count, repeat_delay_secs)
 
         await self._run_sequence(command, send_step)
 

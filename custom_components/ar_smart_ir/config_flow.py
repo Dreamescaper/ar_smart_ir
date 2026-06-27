@@ -31,6 +31,7 @@ from .const import (
     CONF_TEMPERATURE_SENSOR,
     CONF_TEST_COMMAND,
     CONF_TEST_DEVICE,
+    CONF_ZHA_DEVICE,
     DEFAULT_DEVICE_CLASS,
     DEFAULT_DELAY,
     DOMAIN,
@@ -64,6 +65,7 @@ CONTROLLERS = [
     "Infrared",
     "Tuya",
     "UFOR11",
+    "ZHA UFO-R11",
 ]
 
 TEST_COMMAND_PRIORITIES = (
@@ -84,6 +86,7 @@ RAW_BASED_CONTROLLERS = {
     "Infrared",
     "Tuya",
     "UFOR11",
+    "ZHA UFO-R11",
 }
 
 
@@ -134,6 +137,19 @@ def _infrared_entity_selector():
     )
 
 
+def _zha_device_selector():
+    return selector.DeviceSelector(
+        selector.DeviceSelectorConfig(
+            filter=[
+                {
+                    "integration": "zha",
+                }
+            ],
+            multiple=False,
+        )
+    )
+
+
 def _optional_entity_field(config_key: str, data: dict[str, Any]):
     if data.get(config_key):
         return vol.Optional(config_key, default=data.get(config_key))
@@ -155,11 +171,22 @@ def _normalize_controller_target(data: dict[str, Any]) -> None:
         infrared_entity = data.get(CONF_INFRARED_ENTITY) or data.get(CONF_CONTROLLER_DATA)
         data[CONF_INFRARED_ENTITY] = infrared_entity
         data[CONF_CONTROLLER_DATA] = infrared_entity
+        data.pop(CONF_ZHA_DEVICE, None)
+    elif data.get(CONF_CONTROLLER) == "ZHA UFO-R11":
+        zha_device = data.get(CONF_ZHA_DEVICE) or data.get(CONF_CONTROLLER_DATA)
+        data[CONF_ZHA_DEVICE] = zha_device
+        data[CONF_CONTROLLER_DATA] = zha_device
+        data.pop(CONF_INFRARED_ENTITY, None)
+    else:
+        data.pop(CONF_INFRARED_ENTITY, None)
+        data.pop(CONF_ZHA_DEVICE, None)
 
 
 def _controller_target_error_key(controller: str) -> str:
     if controller == "Infrared":
         return CONF_INFRARED_ENTITY
+    if controller == "ZHA UFO-R11":
+        return CONF_ZHA_DEVICE
     return CONF_CONTROLLER_DATA
 
 
@@ -186,6 +213,12 @@ def _build_compatibility_message(
         return (
             "This code will be converted to native Home Assistant infrared raw "
             "timings. Test a command before saving."
+        )
+
+    if selected_controller == "ZHA UFO-R11":
+        return (
+            "This code will be converted to the Tuya/Zosung format used by ZHA "
+            "TS1201 IR blasters. Test a command before saving."
         )
 
     if (
@@ -326,6 +359,17 @@ class ARSmartIRConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     default=infrared_default or "",
                 )
             ] = _infrared_entity_selector()
+        elif controller == "ZHA UFO-R11":
+            zha_device_default = (
+                current_values.get(CONF_ZHA_DEVICE)
+                or current_values.get(CONF_CONTROLLER_DATA)
+            )
+            data_schema[
+                vol.Optional(
+                    CONF_ZHA_DEVICE,
+                    default=zha_device_default or "",
+                )
+            ] = _zha_device_selector()
         else:
             controller_field = _controller_data_field(controller)
             if CONF_CONTROLLER_DATA in current_values:
@@ -657,6 +701,7 @@ class ARSmartIROptionsFlow(config_entries.OptionsFlow):
                 updated_data = {**data, **user_input}
                 updated_data[CONF_CONTROLLER_DATA] = ""
                 updated_data.pop(CONF_INFRARED_ENTITY, None)
+                updated_data.pop(CONF_ZHA_DEVICE, None)
                 self._draft_data = updated_data
                 return self.async_show_form(
                     step_id="init",
@@ -865,6 +910,16 @@ class ARSmartIROptionsFlow(config_entries.OptionsFlow):
                     ),
                 )
             ] = _infrared_entity_selector()
+        elif controller == "ZHA UFO-R11":
+            schema[
+                vol.Optional(
+                    CONF_ZHA_DEVICE,
+                    default=(
+                        data.get(CONF_ZHA_DEVICE)
+                        or data.get(CONF_CONTROLLER_DATA, "")
+                    ),
+                )
+            ] = _zha_device_selector()
         else:
             controller_field = _controller_data_field(controller)
             schema[
