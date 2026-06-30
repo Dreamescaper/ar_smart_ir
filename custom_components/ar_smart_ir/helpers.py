@@ -367,10 +367,18 @@ class Helper:
         if data[:2] != b"\x26\x00":
             raise ValueError("Broadlink packet has an unsupported header.")
 
-        length = int.from_bytes(data[2:4], byteorder="little")
-        payload = data[4:4 + length]
+        # The length field (data[2:4]) frequently counts only up to the start
+        # of the trailing end-of-signal marker (0x00 0x0d 0x05) and excludes
+        # its two value bytes plus any AES block padding. Slicing strictly to
+        # that length therefore cuts a final 0x00-prefixed long gap in half and
+        # makes the decoder fail "mid-pulse" on otherwise-valid captures. Decode
+        # from the byte after the header to the end of the buffer instead, and
+        # stop cleanly when a 0x00 marker has no value bytes left (terminator)
+        # or its value is zero (padding).
+        declared_length = int.from_bytes(data[2:4], byteorder="little")
+        payload = data[4:]
 
-        if len(payload) < length:
+        if len(payload) < declared_length:
             raise ValueError("Broadlink packet payload is truncated.")
 
         pulses = []
@@ -382,9 +390,13 @@ class Helper:
 
             if chunk == 0:
                 if index + 1 >= len(payload):
-                    raise ValueError("Broadlink packet ended mid-pulse.")
+                    # Dangling 0x00 marker: end-of-data terminator.
+                    break
                 chunk = int.from_bytes(payload[index:index + 2], byteorder="big")
                 index += 2
+                if chunk == 0:
+                    # 0x00 0x00 ... = AES block padding past the IR data.
+                    break
 
             pulses.append(int(round(chunk * 8192 / 269)))
 
